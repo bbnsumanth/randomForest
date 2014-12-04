@@ -28,6 +28,9 @@ import org.apache.spark.mllib.draftTree.DecisionTree
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.Utils
+import org.apache.spark.Accumulable
+import org.apache.spark.AccumulableParam
+import org.apache.spark.SparkContext._
 
 /**
  * :: Experimental ::
@@ -115,14 +118,17 @@ private class RandomForest(
 
     val poisson = new Poisson(1.0, new DRand(seed + 1))
     val weightMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
-
+    
     // val weightMatrix = new Array[Array[Int]](metadata.numTrees)(metadata.numExamples.toInt)
     // weigthMatrix.foreach(x => x.foreach(y => poisson.nextInt()))
 
     //###############################################################################################    
 
     //NodeInstanceMAtrix,,,initialize all values to 1 for initial root node calculation 
-    val nodeInstanceMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
+    var nodeInstanceMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
+    println("###############################################################################################")
+    println("initial node matrix: " + nodeInstanceMatrix(0).mkString(","))
+    println("###############################################################################################")
 
     val maxDepth = strategy.maxDepth
     require(maxDepth <= 30,
@@ -186,7 +192,7 @@ private class RandomForest(
       
         timer.start("findBestSplits")
 
-      val BestSplitMap = DecisionTree.findBestSplits(featureInput, metadata, topNodes, nodesForGroup,
+      val treeToGlobalIndexToSplit = DecisionTree.findBestSplits(featureInput, metadata, topNodes, nodesForGroup,
         treeToNodeToIndexInfo, splits, bins, nodeQueue, label, weightMatrix, nodeInstanceMatrix, timer)
 
       timer.stop("findBestSplits")
@@ -194,8 +200,23 @@ private class RandomForest(
       //************************* update nodeInstanceMAtrix after a finding the splits for nodes in group*****************
       
       timer.start("updateNodeInstanceMatrix")
+      //need to pass an accumalator to this method ..because normal variable can not get updated on the rdd operation and 
+      //return value on master ..so nodeInstanceMatrix can not be updated in the updateNOdeInstanceMatrix method.instead pass an accumalator
+      //to get updated and return to master..now assign the value of this accumalator to nodeInstanceMatrix
+      
+      val accumalator = featureInput.sparkContext.accumulable(nodeInstanceMatrix)(MatrixAccumulatorParam) 
 
-      DecisionTree.updateNodeInstanceMatrix(featureInput, BestSplitMap, nodeInstanceMatrix,metadata)
+      val tempMatrix = DecisionTree.updateNodeInstanceMatrix(featureInput, treeToGlobalIndexToSplit, nodeInstanceMatrix,accumalator,metadata)
+      
+      nodeInstanceMatrix = tempMatrix.value
+ 
+     
+     
+    println("###############################################################################################")
+    println("updated node matrix: " + nodeInstanceMatrix(0).mkString(","))
+    println("###############################################################################################")
+   
+  
 
       timer.stop("updateNodeInstanceMatrix")
     }
@@ -479,4 +500,37 @@ object RandomForest extends Serializable with Logging {
     }
   }
 
+}
+
+object MatrixAccumulatorParam extends AccumulableParam[ Array[Array[Int]],(Int,Int,Int)] {
+  
+   def zero(initialValue: Array[Array[Int]]): Array[Array[Int]]= {
+    initialValue
+  }
+   
+  def addInPlace(m1:Array[Array[Int]] , m2: Array[Array[Int]]): Array[Array[Int]]= {
+   val columnLength:Int = m1.length
+   val rowLength:Int = m1(0).length
+   var updatedMatrix = Array.ofDim[Int](columnLength, rowLength)
+   
+   var i:Int = 0
+   var j:Int =0
+   while (j < columnLength){
+     while (i < rowLength){
+      val a = Math.max(m1(j)(i),m2(j)(i)) 
+      updatedMatrix(j)(i) = a
+      i+=1
+   } 
+   j+=1
+  }
+   
+   updatedMatrix 
+  }
+  
+  def addAccumulator(acc:Array[Array[Int]],value:(Int,Int,Int)):Array[Array[Int]]={
+    
+    acc(value._2 )(value._3) = value._1
+    acc
+    
+  }
 }

@@ -27,3 +27,25 @@ object Test {
   }
 }
 //   /home/bharath/workspace/mllib/target/scala-2.10/random-forest_2.10-1.0.jar
+
+/**
+ * script for testing on shell
+ */
+/*
+ 
+import org.apache.spark.mllib.draftTree.DecisionTree
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.mllib.linalg.Vectors
+
+val data = MLUtils.loadLibSVMFile(sc, "/home/bharath/irisDraft.txt").cache()
+val numClasses = 7
+val categoricalFeaturesInfo = Map[Int,Int]()
+val impurity = "entropy"
+val maxDepth = 5
+val maxBins = 100 
+val model = DecisionTree.trainClassifier(data, numClasses,categoricalFeaturesInfo, impurity,maxDepth, maxBins)
+
+
+*/
+
+

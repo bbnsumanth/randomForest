@@ -17,9 +17,9 @@ class FeatureStatsAggregator(
   
   private val binsForFeature = metadata.numBins(featureIndex)
   
-  private val statsSize: Int = impurityAggregator.statsSize//can also use metadata.numClasses
+   val statsSize: Int = impurityAggregator.statsSize//can also use metadata.numClasses
   
-  private val featureSize:Int = binsForFeature*statsSize
+   val featureSize:Int = binsForFeature*statsSize
   
  // this array stores the offsets for every node in the training
  val nodeOffsets:Array[Int] = numNodes match{
@@ -29,8 +29,8 @@ class FeatureStatsAggregator(
   }
   
  private val allStatsSize: Int = numNodes*featureSize
- 
- private val allStats: Array[Double] = new Array[Double](allStatsSize)
+ //change this to private
+ val allStats: Array[Double] = new Array[Double](allStatsSize)
  
 
  /*For ordered features, this is a pre-computed nodeOffset

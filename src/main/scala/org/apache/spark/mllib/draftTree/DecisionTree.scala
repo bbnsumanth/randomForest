@@ -20,6 +20,8 @@ import org.apache.spark.mllib.draftTree.model._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.random.XORShiftRandom
 import org.apache.spark.SparkContext._
+import org.apache.spark.Accumulable
+import org.apache.spark.AccumulableParam
 
 
 /**
@@ -178,7 +180,8 @@ object DecisionTree extends Serializable with Logging {
    *                  (suggested value: 5)
    * @param maxBins maximum number of bins used for splitting features
    *                 (suggested value: 32)
-   * @return DecisionTreeModel that can be used for prediction
+   * @return DecisionTreeModel th
+}at can be used for prediction
    */
   def trainClassifier(
       input: RDD[LabeledPoint],
@@ -415,7 +418,7 @@ object DecisionTree extends Serializable with Logging {
      */
     
    
-    def NodeToSplit(
+    def NodeToFeatureSplit(
       binAggregates: FeatureStatsAggregator, 
       splits: Array[Split],
       featureIndex:Int
@@ -424,18 +427,23 @@ object DecisionTree extends Serializable with Logging {
   
   
     
-      val nodeToSplitMap = new mutable.HashMap[Int, (Split, InformationGainStats,Predict)]()
+      val nodeToFeatureSplit = new mutable.HashMap[Int, (Split, InformationGainStats,Predict)]()
       
       val numSplits = binAggregates.metadata.numSplits(featureIndex)
       
       val numBins = binAggregates.metadata.numBins(featureIndex)
+      
+      println("###########################################################################################")
+      println("stats array for this group of training :" + binAggregates.allStats.mkString(",")  )
+      println("###########################################################################################")
   
 
        //*************************** for continuous feature ***************************************
        if (binAggregates.metadata.isContinuous(featureIndex)) {
-          println("#############################################################################################################################")
+        /*  println("###########################################################################################")
            println("entered continouous features in NodeToSplit method")
-           println("##############################################################################################################################")
+           println("##################################################################################################")
+         */
          Range(0, binAggregates.numNodes).map{nodeIndex =>  
            
          val nodeOffset = binAggregates.getNodeOffset(nodeIndex)
@@ -461,14 +469,14 @@ object DecisionTree extends Serializable with Logging {
            val leftChildStats = binAggregates.getImpurityCalculator(nodeOffset, bestFeatureSplitIndex)
            val rightChildStats = binAggregates.getImpurityCalculator(nodeOffset, numSplits).subtract(leftChildStats)
            val predict = calculatePredict(leftChildStats, rightChildStats)
-           
+          
            println("#############################################################################################################################")
            println("For nodeIndex: "+nodeIndex+" best gain for the feature:"+ featureIndex +
                " is "+ bestFeatureGainStats.gain +" and the predict is: "+predict.predict +" with prob:"+ predict.prob )
            println("##############################################################################################################################")
          
            //Update the map for this node  
-           nodeToSplitMap(nodeIndex)=(splits(bestFeatureSplitIndex),bestFeatureGainStats,predict)  
+           nodeToFeatureSplit(nodeIndex)=(splits(bestFeatureSplitIndex),bestFeatureGainStats,predict)  
          }
        }else if  (binAggregates.metadata.isUnordered(featureIndex)){
          
@@ -488,7 +496,7 @@ object DecisionTree extends Serializable with Logging {
   
            //USING the LEFT AND RIGHT STATS for the best split find  PREDICT FOR THAT SPLIT. 
            val leftChildStats = binAggregates.getImpurityCalculator(leftChildOffset, bestFeatureSplitIndex)
-           val rightChildStats = binAggregates.getImpurityCalculator(rightChildOffset, numSplits).subtract(leftChildStats)
+           val rightChildStats = binAggregates.getImpurityCalculator(rightChildOffset,bestFeatureSplitIndex )
            val predict = calculatePredict(leftChildStats, rightChildStats)
            
          println("#############################################################################################################################")
@@ -498,7 +506,7 @@ object DecisionTree extends Serializable with Logging {
          
            
            //Update the map for this node  
-         nodeToSplitMap(nodeIndex)=(splits(bestFeatureSplitIndex),bestFeatureGainStats,predict)  
+         nodeToFeatureSplit(nodeIndex)=(splits(bestFeatureSplitIndex),bestFeatureGainStats,predict)  
          }   
       }else{
         //************************************ordered features***************************************
@@ -587,12 +595,12 @@ object DecisionTree extends Serializable with Logging {
            println("##############################################################################################################################")
          
            //Update the map for this node  
-           nodeToSplitMap(nodeIndex)=(bestFeatureSplit,bestFeatureGainStats,predict)  
+           nodeToFeatureSplit(nodeIndex)=(bestFeatureSplit,bestFeatureGainStats,predict)  
          } 
       }
       
        //return the map
-      nodeToSplitMap.toMap   
+      nodeToFeatureSplit.toMap   
    }
            
       
@@ -628,33 +636,37 @@ object DecisionTree extends Serializable with Logging {
     
      /**
        * it takes nodeToBestSplit: Map[Int,(Split, InformationGainStats, Predict)]
-       * and gives back treeToGlobalIndexToSplit:Map[Int,Map[Int,(Split,Node)]]
+       * and gives back TreeToGlobalIndexToSplit:Map[Int,Map[Int,(Split,Node)]]
        * This is used for updating the nodeInstanceMatrix
        */
     
       
-    def treeToGlobalIndexToSplit(
+    def getTreeToGlobalIndexToSplit(
           nodeToBestSplit: Map[Int,(Split, InformationGainStats, Predict)],
           nodesForGroup: Map[Int, Array[Node]],treeToNodeToIndexInfo: Map[Int, Map[Int, NodeIndexInfo]]
           ):Map[Int,Map[Int,(Split,Node)]] = {
         
         
-      val treeToNodeToSplit =scala.collection.mutable.Map[Int,Map[Int,(Split,Node)]]()
+      val treeToGlobalIndexToSplit =scala.collection.mutable.Map[Int,Map[Int,(Split,Node)]]()
    
       nodesForGroup.foreach { case (treeIndex, nodesForTree) =>
-          val globalIndexToSplit = scala.collection.mutable.Map[Int,(Split,Node)]()
+          
+        val globalIndexToSplit = scala.collection.mutable.Map[Int,(Split,Node)]()
+          
           nodesForTree.foreach { node =>
              val nodeIndex = node.id
              val nodeInfo = treeToNodeToIndexInfo(treeIndex)(nodeIndex)
              val localNodeIndex = nodeInfo.nodeIndexInGroup
              val (split: Split, stats: InformationGainStats, predict: Predict) =
              nodeToBestSplit(localNodeIndex)
+             
+             //the node in the nodes for group is an updated node after training
              globalIndexToSplit += (nodeIndex ->(split,node))
           }
       
-      treeToNodeToSplit += (treeIndex -> (globalIndexToSplit.toMap))
+      treeToGlobalIndexToSplit += (treeIndex -> (globalIndexToSplit.toMap))
       }
-      treeToNodeToSplit.toMap
+      treeToGlobalIndexToSplit.toMap
          
          
       }
@@ -690,8 +702,8 @@ object DecisionTree extends Serializable with Logging {
             
             if(featuresForNode.contains(featurePoint.featureIndex)){
               val offset = featureStatsAggregator.getNodeOffset(localNodeIndex)
-              //changed offset to offset-1
-              featureStatsAggregator.nodeUpdate(offset-1, featurePoint.featureValues(instanceId),
+              
+              featureStatsAggregator.nodeUpdate(offset, featurePoint.featureValues(instanceId),
                                             label(instanceId), instanceWeight: Double)  
                 
              
@@ -778,27 +790,35 @@ object DecisionTree extends Serializable with Logging {
      * 
      */
     
-    val nodeToSplitRDD = input.map{ x => {
-      
          println("######################################################################################################/n")
          println("no.of nodes to train in this group : " + numNodes)
          println("######################################################################################################/n")
+    
+    val nodeToSplitRDD = input.map{ x => {
+      
         
          // crete an FSA for all nodes in training and update it for that feature
         
          println("######################################################################################################/n")
          println("updating stats for feature : " + x.featureIndex )
          println("######################################################################################################/n")
-         
+      
          val updatedStats: FeatureStatsAggregator = metadata.isUnordered(x.featureIndex ) match {
          //need to pass bins,because we have to update half of the bins(that is for every split we have to update one bin) 
          //while updating stats for unordered features
          case true  => unorderedBinSeqOp(x,bins(x.featureIndex ))
          case false => orderedBinSeqOp(x)
          } 
+         /*
          println("######################################################################################################/n")
          println("updating stats for feature : " + x.featureIndex + " completed")
+         println("numClasses is : "+ updatedStats.statsSize )
+         println("featureSize is : "+ updatedStats.featureSize )
+         println("nodeOffests array is : "+ updatedStats.nodeOffsets)
+         println("stats array for this fsa is :" + updatedStats.allStats.length )
          println("######################################################################################################/n")
+         * 
+         */
          // now calculate the best split for every node in that feature
          /*
           * this is a Map:LocalnodeIndex-->(split , gainStat,predict)
@@ -808,7 +828,7 @@ object DecisionTree extends Serializable with Logging {
          println("calculating best split for feature : " + x.featureIndex )
          println("######################################################################################################/n")
          
-          NodeToSplit(updatedStats,splits(x.featureIndex ),x.featureIndex )
+          NodeToFeatureSplit(updatedStats,splits(x.featureIndex ),x.featureIndex )
           
         
          
@@ -840,8 +860,10 @@ object DecisionTree extends Serializable with Logging {
        temp.toMap
        
      }
-     
-     println("..................." + nodeToBestSplit+  ".................................")
+     println("###############################################################################################")
+     println(" finding best splits completed for this group of training")
+    println("nodeToBestSplit map:LocalnodeIndex-->(bestSplit,gainStats,predict) is : " + nodeToBestSplit)
+    println("###############################################################################################")
   
      timer.stop("chooseSplits")
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& END OF REDUCE PROGRAM &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&       
@@ -891,10 +913,17 @@ object DecisionTree extends Serializable with Logging {
       */
   
 
-  val treeToNodeToSplit = treeToGlobalIndexToSplit(nodeToBestSplit,nodesForGroup,treeToNodeToIndexInfo)
+  val treeToGlobalIndexToSplit = getTreeToGlobalIndexToSplit(nodeToBestSplit,nodesForGroup,treeToNodeToIndexInfo)
+  
   println("......best split calculation completed for one group.................................")
   
-  treeToNodeToSplit  // this is returned from findBestSplits method
+   println("###############################################################################################")
+   println("driver program completed for this group ..nodes in groups  are updated with splits")
+    println("treeToGlobalIndexToSplit Map:[treeIndex,Map[GlobalNodeIndex,(Split,Node)]]: " + treeToGlobalIndexToSplit)
+    println("###############################################################################################")
+      
+  
+  treeToGlobalIndexToSplit  // this is returned from findBestSplits method
   
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& END OF DRIVER PROGRAM &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&   
   
@@ -903,16 +932,24 @@ object DecisionTree extends Serializable with Logging {
 
   /**
    * this method is  called from ranfdomForest to update the nodeInstanceMatrix 
-   * treeToNodeToSplit:Map[featureIndex -> (NodeIndex, Split)]
+   * treeToGlobalIndexToSplit:Map[featureIndex -> (NodeIndex, Split)]
    */ 
  
   
   private[draftTree] def updateNodeInstanceMatrix(input:RDD[FeaturePoint],
-      treeToNodeToSplit:Map[Int,Map[Int, (Split,Node)]],
+      treeToGlobalIndexToSplit:Map[Int,Map[Int, (Split,Node)]],
       nodeInstanceMatrix:Array[Array[Int]],
-      metadata:DecisionTreeMetadata) = {
+      accumalator:Accumulable[Array[Array[Int]],(Int, Int, Int)],
+      metadata:DecisionTreeMetadata):Accumulable[Array[Array[Int]],(Int, Int, Int)] = {
     
-    input.map{x => { 
+    println("###############################################################################################")
+    println("updating nodeMatrix started")
+    println("###############################################################################################")
+    
+   
+      
+    
+    input.foreach{x => 
       
       var instanceId = 0
       while(instanceId < metadata.numExamples){
@@ -920,10 +957,16 @@ object DecisionTree extends Serializable with Logging {
         var treeId = 0
         while(treeId < metadata.numTrees){
           
-          val globalNodeIndex = nodeInstanceMatrix(treeId)(instanceId)
           
-          val split = treeToNodeToSplit(treeId)(globalNodeIndex)._1
-          val node = treeToNodeToSplit(treeId)(globalNodeIndex)._2
+          
+           val globalNodeIndex = nodeInstanceMatrix(treeId)(instanceId)
+           
+          
+          
+          val split = treeToGlobalIndexToSplit(treeId)(globalNodeIndex)._1
+          val node = treeToGlobalIndexToSplit(treeId)(globalNodeIndex)._2
+          
+         
           
           if(split.feature == x.featureIndex ){
             
@@ -936,23 +979,36 @@ object DecisionTree extends Serializable with Logging {
            {Node.leftChildIndex(node.id)}else{Node.rightChildIndex(node.id)}
            
            }
+           
+           println("########################################################################")
+           println("for featureIndex:" + x.featureIndex  )
+           println("for tree:" + treeId + "for instance : "+ instanceId)
+           println("initial globalNodeIndex: " + globalNodeIndex)
+           println("split threshold: " + split.threshold )
+           println("featureValue: " + featureValue )
+           println("updated Node index :" + updatedNodeIndex )
+           
            //update the matrix with this value
-            nodeInstanceMatrix(treeId)(instanceId) = updatedNodeIndex
+            accumalator += (updatedNodeIndex,treeId,instanceId)
             
             }
           treeId+=1
           }
           instanceId+=1
         }
-      }
+      
       
     }
+  
+  accumalator
       
 }
 //...........................................end of updateNodeInstanceMatrix
 
 }
 //.............................................end of decisionTree Object...............................................
+
+  
 
   
   
