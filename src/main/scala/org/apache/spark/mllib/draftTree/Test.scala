@@ -44,6 +44,13 @@ val impurity = "entropy"
 val maxDepth = 5
 val maxBins = 100 
 val model = DecisionTree.trainClassifier(data, numClasses,categoricalFeaturesInfo, impurity,maxDepth, maxBins)
+val labelAndPreds = data.map { point =>
+  val prediction = model.predict(point.features)
+  (point.label, prediction)
+}
+val trainErr = labelAndPreds.filter(r => r._1 != r._2).count.toDouble / data.count
+println("Training Error = " + trainErr)
+println("Learned classification tree model:\n" + model)
 
 
 */
