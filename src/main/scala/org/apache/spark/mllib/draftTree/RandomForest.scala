@@ -203,14 +203,16 @@ private class RandomForest(
       //need to pass an accumalator to this method ..because normal variable can not get updated on the rdd operation and 
       //return value on master ..so nodeInstanceMatrix can not be updated in the updateNOdeInstanceMatrix method.instead pass an accumalator
       //to get updated and return to master..now assign the value of this accumalator to nodeInstanceMatrix
+      val initialValue = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
+      val accumalator = featureInput.sparkContext.accumulable(initialValue)(MatrixAccumulatorParam)
 
-      val accumalator = featureInput.sparkContext.accumulable(nodeInstanceMatrix)(MatrixAccumulatorParam)
+      val tempMatrix = DecisionTree.updateNodeInstanceMatrix(featureInput,treeToGlobalIndexToSplit , nodeInstanceMatrix, accumalator, metadata)
 
-      val tempMatrix = DecisionTree.updateNodeInstanceMatrix(featureInput, treeToGlobalIndexToSplit, nodeInstanceMatrix, accumalator, metadata)
-
-      nodeInstanceMatrix = tempMatrix.value
+      
+      nodeInstanceMatrix = tempMatrix.value.clone
 
       println("###############################################################################################")
+      println("Addr after:"+nodeInstanceMatrix)
       println("updated node matrix: " + nodeInstanceMatrix(0).mkString(","))
       println("###############################################################################################")
 

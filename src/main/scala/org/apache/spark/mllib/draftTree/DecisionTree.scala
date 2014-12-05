@@ -305,7 +305,7 @@ object DecisionTree extends Serializable with Logging {
     label: Array[Double],
     weightMatrix: Array[Array[Int]],
     nodeInstanceMatrix: Array[Array[Int]],
-    timer: TimeTracker = new TimeTracker): Map[Int, Map[Int, (Split, Node)]] = {
+    timer: TimeTracker = new TimeTracker): Map[Int, Map[Int, Node]] = {
 
     val numNodes = nodesForGroup.values.map(_.size).sum
 
@@ -421,7 +421,7 @@ object DecisionTree extends Serializable with Logging {
 
       //*************************** for continuous feature ***************************************
       if (binAggregates.metadata.isContinuous(featureIndex)) {
-        
+
         Range(0, binAggregates.numNodes).map { nodeIndex =>
 
           val nodeOffset = binAggregates.getNodeOffset(nodeIndex)
@@ -614,24 +614,24 @@ object DecisionTree extends Serializable with Logging {
 
     def getTreeToGlobalIndexToSplit(
       nodeToBestSplit: Map[Int, (Split, InformationGainStats, Predict)],
-      nodesForGroup: Map[Int, Array[Node]], treeToNodeToIndexInfo: Map[Int, Map[Int, NodeIndexInfo]]): Map[Int, Map[Int, (Split, Node)]] = {
+      nodesForGroup: Map[Int, Array[Node]], treeToNodeToIndexInfo: Map[Int, Map[Int, NodeIndexInfo]]): Map[Int, Map[Int, Node]] = {
 
-      val treeToGlobalIndexToSplit = scala.collection.mutable.Map[Int, Map[Int, (Split, Node)]]()
+      val treeToGlobalIndexToSplit = scala.collection.mutable.Map[Int, Map[Int, Node]]()
 
       nodesForGroup.foreach {
         case (treeIndex, nodesForTree) =>
 
-          val globalIndexToSplit = scala.collection.mutable.Map[Int, (Split, Node)]()
+          val globalIndexToSplit = scala.collection.mutable.Map[Int, Node]()
 
           nodesForTree.foreach { node =>
             val nodeIndex = node.id
             val nodeInfo = treeToNodeToIndexInfo(treeIndex)(nodeIndex)
             val localNodeIndex = nodeInfo.nodeIndexInGroup
-            val (split: Split, stats: InformationGainStats, predict: Predict) =
-              nodeToBestSplit(localNodeIndex)
+            //val (split: Split, stats: InformationGainStats, predict: Predict) =
+            //nodeToBestSplit(localNodeIndex)
 
             //the node in the nodes for group is an updated node after training
-            globalIndexToSplit += (nodeIndex -> (split, node))
+            globalIndexToSplit += (nodeIndex -> node)
           }
 
           treeToGlobalIndexToSplit += (treeIndex -> (globalIndexToSplit.toMap))
@@ -643,7 +643,7 @@ object DecisionTree extends Serializable with Logging {
     /**
      * creates a featureStatsAggregator for a particular ORDERED feature
      * and updated the featureStatsAggregator for all the nodes in the training for a given feature.
-     * 
+     *
      */
     def orderedBinSeqOp(
       featurePoint: FeaturePoint): FeatureStatsAggregator = {
@@ -687,7 +687,7 @@ object DecisionTree extends Serializable with Logging {
     /**
      * creates a featureStatsAggregator for a particular UNORDERED feature
      * and updated the featureStatsAggregator for all the nodes in the training for a given feature.
-     * 
+     *
      */
 
     def unorderedBinSeqOp(
@@ -742,7 +742,7 @@ object DecisionTree extends Serializable with Logging {
 
       featureStatsAggregator
     }
-    
+
     /**
      * creates a featureStatsAggregator for a particular continuous feature
      * and update the featureStatsAggregator for all the nodes in the training for a given feature.
@@ -757,7 +757,7 @@ object DecisionTree extends Serializable with Logging {
       val featureStatsAggregator = {
         new FeatureStatsAggregator(metadata, numNodes, featurePoint.featureIndex)
       }
-      
+
       //helper method to find the bin index given its featureValue and bins for that feature
       def binarySearchForBins(featureValue: Double): Int = {
         var left = 0
@@ -798,8 +798,8 @@ object DecisionTree extends Serializable with Logging {
             val instanceWeight = weightMatrix(treeId)(instanceId)
 
             if (featuresForNode.contains(featurePoint.featureIndex)) {
-              
-              val offset = featureStatsAggregator.getNodeOffset(localNodeIndex)           
+
+              val offset = featureStatsAggregator.getNodeOffset(localNodeIndex)
               featureStatsAggregator.nodeUpdate(offset, binIndex,
                 label(instanceId), instanceWeight: Double)
 
@@ -837,13 +837,13 @@ object DecisionTree extends Serializable with Logging {
             }
           }
         }
-      
+
         // now calculate the best split for every node in that feature
         /*
           * this is a Map:LocalnodeIndex-->(split,gainStat,predict)
           * 
           */
-        
+
         NodeToFeatureSplit(updatedStats, splits(x.featureIndex), x.featureIndex)
 
       }
@@ -944,13 +944,13 @@ object DecisionTree extends Serializable with Logging {
    */
 
   private[draftTree] def updateNodeInstanceMatrix(input: RDD[FeaturePoint],
-    treeToGlobalIndexToSplit: Map[Int, Map[Int, (Split, Node)]],
+    treeToGlobalIndexToSplit: Map[Int, Map[Int, Node]],
     nodeInstanceMatrix: Array[Array[Int]],
     accumalator: Accumulable[Array[Array[Int]], (Int, Int, Int)],
     metadata: DecisionTreeMetadata): Accumulable[Array[Array[Int]], (Int, Int, Int)] = {
 
     println("###############################################################################################")
-    println("updating nodeMatrix started")
+    println(nodeInstanceMatrix(0).mkString(","))
     println("###############################################################################################")
 
     input.foreach { x =>
@@ -962,33 +962,34 @@ object DecisionTree extends Serializable with Logging {
         while (treeId < metadata.numTrees) {
 
           val globalNodeIndex = nodeInstanceMatrix(treeId)(instanceId)
-          println("&&&&&&&&&&&  global nodeIndex:"+globalNodeIndex+"for instance: "+instanceId+ " during feature : "+x.featureIndex +"&&&&&&&&&&&&&&&&&")
+          
+          if (treeToGlobalIndexToSplit(treeId).contains(globalNodeIndex)) {
 
-          val split = treeToGlobalIndexToSplit(treeId)(globalNodeIndex)._1
-          val node = treeToGlobalIndexToSplit(treeId)(globalNodeIndex)._2
+            val node = treeToGlobalIndexToSplit(treeId)(globalNodeIndex)
+            val split = treeToGlobalIndexToSplit(treeId)(globalNodeIndex).split.getOrElse(null)
+            if(node.isLeaf){
+              
+              accumalator += (globalNodeIndex, treeId, instanceId)
+              
+            }else if (split.feature == x.featureIndex ) {
 
-          if (split.feature == x.featureIndex) {
+              val featureValue = x.featureValues(instanceId)
 
-            val featureValue = x.featureValues(instanceId)
+              val updatedNodeIndex: Int = split.featureType match {
+                case Continuous => if (featureValue < split.threshold) { Node.leftChildIndex(node.id) } else { Node.rightChildIndex(node.id) }
+                case Categorical => if (split.categories.contains(featureValue)) { Node.leftChildIndex(node.id) } else { Node.rightChildIndex(node.id) }
 
-            val updatedNodeIndex: Int = split.featureType match {
-              case Continuous => if (featureValue < split.threshold) { Node.leftChildIndex(node.id) } else { Node.rightChildIndex(node.id) }
-              case Categorical => if (split.categories.contains(featureValue)) { Node.leftChildIndex(node.id) } else { Node.rightChildIndex(node.id) }
-
+              }
+              accumalator += (updatedNodeIndex, treeId, instanceId)
             }
 
-            println("########################################################################")
-            println("for featureIndex:" + x.featureIndex)
-            println("for tree:" + treeId + "for instance : " + instanceId)
-            println("initial globalNodeIndex: " + globalNodeIndex)
-            println("split threshold: " + split.threshold)
-            println("featureValue: " + featureValue)
-            println("updated Node index :" + updatedNodeIndex)
-
-            //update the matrix with this value
-            accumalator += (updatedNodeIndex, treeId, instanceId)
-
+          }else{
+            
+            accumalator += (globalNodeIndex, treeId, instanceId)
           }
+          
+          
+          
           treeId += 1
         }
         instanceId += 1
