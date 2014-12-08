@@ -30,6 +30,7 @@ import org.apache.spark.util.Utils
 import org.apache.spark.Accumulable
 import org.apache.spark.AccumulableParam
 import org.apache.spark.SparkContext._
+import util.Random._
 
 /**
  * :: Experimental ::
@@ -95,42 +96,45 @@ private class RandomForest(
     // of the input data.
 
     timer.start("findSplitsBins")
-    
-    
+
     val (splits, bins) = metadata.findSplitsBins(retaggedInput)
-    
+
     timer.stop("findSplitsBins")
 
     logDebug("numBins: feature: number of bins")
     logDebug(Range(0, metadata.numFeatures).map { featureIndex =>
       s"\t$featureIndex\t${metadata.numBins(featureIndex)}"
     }.mkString("\n"))
-   
-    
-    
+
     val label = retaggedInput.map(x => x.label).collect
     val featureInput = FeaturePoint.convertToFeatureRDD(retaggedInput)
-    
+
     retaggedInput.unpersist()
     featureInput.persist()
 
-    //############################################################################################## 
-    // need to change this code
-    //ryt now it is initialized to 1
+    //bagging
 
-    val poisson = new Poisson(1.0, new DRand(seed + 1))
-    val weightMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
+    val weightMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(0))
 
-    // val weightMatrix = new Array[Array[Int]](metadata.numTrees)(metadata.numExamples.toInt)
-    // weigthMatrix.foreach(x => x.foreach(y => poisson.nextInt()))
+    weightMatrix.foreach { x =>
 
-    //###############################################################################################    
+      var i = 0
+      while (i < metadata.numExamples) {
+
+        val r = new scala.util.Random
+        val index = r.nextInt(metadata.numExamples.toInt)
+        x(index) = x(index) + 1
+        i += 1
+
+      }
+    }
+
+    println("@@@@@@@@@@@@@@@@@@@@@@@@@@ weightMatrix for tree 1: " + weightMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@")
+    println("@@@@@@@@@@@@@@@@@@@@@@@@@@ weightMatrix for tree 2: " + weightMatrix(1).mkString(",") + "@@@@@@@@@@@@@@@@")
+   
 
     //NodeInstanceMAtrix,,,initialize all values to 1 for initial root node calculation 
     var nodeInstanceMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
-    println("###############################################################################################")
-    println("initial node matrix: " + nodeInstanceMatrix(0).mkString(","))
-    println("###############################################################################################")
 
     val maxDepth = strategy.maxDepth
     require(maxDepth <= 30,
@@ -203,18 +207,17 @@ private class RandomForest(
       //need to pass an accumalator to this method ..because normal variable can not get updated on the rdd operation and 
       //return value on master ..so nodeInstanceMatrix can not be updated in the updateNOdeInstanceMatrix method.instead pass an accumalator
       //to get updated and return to master..now assign the value of this accumalator to nodeInstanceMatrix
+
       val initialValue = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
+
       val accumalator = featureInput.sparkContext.accumulable(initialValue)(MatrixAccumulatorParam)
 
-      val tempMatrix = DecisionTree.updateNodeInstanceMatrix(featureInput,treeToGlobalIndexToSplit , nodeInstanceMatrix, accumalator, metadata)
+      val tempMatrix = DecisionTree.updateNodeInstanceMatrix(featureInput, treeToGlobalIndexToSplit, nodeInstanceMatrix, accumalator, metadata)
 
-      
-      nodeInstanceMatrix = tempMatrix.value.clone
+      nodeInstanceMatrix = tempMatrix.clone
 
-      println("###############################################################################################")
-      println("Addr after:"+nodeInstanceMatrix)
-      println("updated node matrix: " + nodeInstanceMatrix(0).mkString(","))
-      println("###############################################################################################")
+      println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 0: " + nodeInstanceMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@@")
+      println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 1: " + nodeInstanceMatrix(1).mkString(",") + "@@@@@@@@@@@@@@@@@")
 
       timer.stop("updateNodeInstanceMatrix")
     }
@@ -403,7 +406,6 @@ object RandomForest extends Serializable with Logging {
       categoricalFeaturesInfo.asInstanceOf[java.util.Map[Int, Int]].asScala.toMap,
       numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins, seed)
   }
-
 
   private[draftTree] class NodeIndexInfo(
     val nodeIndexInGroup: Int,
