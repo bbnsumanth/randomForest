@@ -193,7 +193,8 @@ private class RandomForest(
         s"RandomForest selected empty nodesForGroup.  Error for unknown reason.")
 
       //******************** Choose splits for nodes in group, and enqueue new nodes as needed.**************************
-
+      val NodesToTrain = nodesForGroup.values.map(_.size).sum
+      println("number of nodes to train in this level of trainig is : " +NodesToTrain+" %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%" )
       timer.start("findBestSplits")
 
       val treeToGlobalIndexToSplit = DecisionTree.findBestSplits(featureInput, metadata, topNodes, nodesForGroup,
@@ -216,7 +217,7 @@ private class RandomForest(
 
       nodeInstanceMatrix = tempMatrix.clone
 
-      println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 0: " + nodeInstanceMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@@")
+     // println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 0: " + nodeInstanceMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@@")
       
 
       timer.stop("updateNodeInstanceMatrix")

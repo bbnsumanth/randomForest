@@ -28,14 +28,45 @@ println(prediction)
 */
 /*
 import org.apache.spark.mllib.draftTree.DecisionTree
+import org.apache.spark.mllib.draftTree.RandomForest
 import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.mllib.linalg.Vectors
-val data = MLUtils.loadLibSVMFile(sc, "/home/bharath/iris.txt").cache()
-val numClasses = 4
+val data = MLUtils.loadLibSVMFile(sc, "/home/bharath/satimage.txt").cache()
+val numClasses = 7
+val categoricalFeaturesInfo = Map[Int,Int]()
+val numTrees = 500
+val featureSubsetStrategy = "auto"
+val impurity = "entropy"
+val maxDepth = 25
+val maxBins = 100
+val seed = 1
+val model = RandomForest.trainClassifier(data, numClasses,categoricalFeaturesInfo, numTrees,featureSubsetStrategy,
+impurity,maxDepth, maxBins,seed)
+
+//val model = DecisionTree.trainClassifier(data, numClasses,categoricalFeaturesInfo, impurity,maxDepth, maxBins)
+val labelAndPreds = data.map { point =>
+val prediction = model.predict(point.features)
+(point.label, prediction)
+}
+val trainErr = labelAndPreds.filter(r => r._1 != r._2).count.toDouble / data.count
+println("Training Error = " + trainErr)
+println("Learned classification tree model:\n" + model)
+
+
+
+import org.apache.spark.mllib.draftTree.DecisionTree
+import org.apache.spark.mllib.draftTree.RandomForest
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.mllib.linalg.Vectors
+val data = MLUtils.loadLibSVMFile(sc, "/home/bharath/satimage.txt").cache()
+val numClasses = 7
 val categoricalFeaturesInfo = Map[Int,Int]()
 val impurity = "entropy"
-val maxDepth = 5
+val maxDepth = 29
 val maxBins = 100
+
+
+
 val model = DecisionTree.trainClassifier(data, numClasses,categoricalFeaturesInfo, impurity,maxDepth, maxBins)
 val labelAndPreds = data.map { point =>
 val prediction = model.predict(point.features)
@@ -44,5 +75,7 @@ val prediction = model.predict(point.features)
 val trainErr = labelAndPreds.filter(r => r._1 != r._2).count.toDouble / data.count
 println("Training Error = " + trainErr)
 println("Learned classification tree model:\n" + model)
+
+
 */
 
