@@ -130,7 +130,7 @@ private class RandomForest(
     }
 
     println("@@@@@@@@@@@@@@@@@@@@@@@@@@ weightMatrix for tree 1: " + weightMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@")
-    //println("@@@@@@@@@@@@@@@@@@@@@@@@@@ weightMatrix for tree 2: " + weightMatrix(1).mkString(",") + "@@@@@@@@@@@@@@@@")
+    
    
 
     //NodeInstanceMAtrix,,,initialize all values to 1 for initial root node calculation 
@@ -217,7 +217,7 @@ private class RandomForest(
       nodeInstanceMatrix = tempMatrix.clone
 
       println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 0: " + nodeInstanceMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@@")
-      //println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 1: " + nodeInstanceMatrix(1).mkString(",") + "@@@@@@@@@@@@@@@@@")
+      
 
       timer.stop("updateNodeInstanceMatrix")
     }
@@ -503,9 +503,10 @@ object MatrixAccumulatorParam extends AccumulableParam[Array[Array[Int]], (Int, 
     val rowLength: Int = m1(0).length
     var updatedMatrix = Array.ofDim[Int](columnLength, rowLength)
 
-    var i: Int = 0
+    
     var j: Int = 0
     while (j < columnLength) {
+      var i: Int = 0
       while (i < rowLength) {
         val a = Math.max(m1(j)(i), m2(j)(i))
         updatedMatrix(j)(i) = a

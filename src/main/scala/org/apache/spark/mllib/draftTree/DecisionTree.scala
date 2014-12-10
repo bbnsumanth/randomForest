@@ -876,11 +876,13 @@ object DecisionTree extends Serializable with Logging {
       temp.toMap
 
     }
-    
+    /*
     println("###############################################################################################")
     println(" finding best splits completed for this group of training")
     println("nodeToBestSplit map:LocalnodeIndex-->(bestSplit,gainStats,predict) is : " + nodeToBestSplit)
     println("###############################################################################################")
+    * 
+    */
     
     
 
@@ -933,11 +935,13 @@ object DecisionTree extends Serializable with Logging {
       */
 
     val treeToGlobalIndexToSplit = getTreeToGlobalIndexToSplit(nodesForGroup)
-
+    /*
     println("###############################################################################################")
     println("driver program completed for this group ..nodes in groups  are updated with splits")
     println("treeToGlobalIndexToSplit Map:[treeIndex,Map[GlobalNodeIndex,Node]]: " + treeToGlobalIndexToSplit)
     println("###############################################################################################")
+    * 
+    */
 
     treeToGlobalIndexToSplit // this is returned from findBestSplits method
 
