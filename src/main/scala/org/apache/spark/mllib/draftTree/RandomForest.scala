@@ -81,6 +81,14 @@ private class RandomForest(
     timer.start("init")
 
     val retaggedInput = input.retag(classOf[LabeledPoint]).persist
+    
+    val label = retaggedInput.map(x => x.label).collect
+    val featureInput = FeaturePoint.convertToFeatureRDD(retaggedInput)
+    
+    //from the featureInput we can derive the featureArity map,but we need what features are continous 
+    //in the strategy instead of categoricalFeatureInfo..now the user instead of giving categoricalFeatureInfo should give now what are continous features
+    // then we can go through the featureInput to find the map[featureIndex -> no.of categories]
+    
 
     val metadata =
       DecisionTreeMetadata.buildMetadata(retaggedInput, strategy)
@@ -105,9 +113,11 @@ private class RandomForest(
     logDebug(Range(0, metadata.numFeatures).map { featureIndex =>
       s"\t$featureIndex\t${metadata.numBins(featureIndex)}"
     }.mkString("\n"))
-
+    /*
     val label = retaggedInput.map(x => x.label).collect
     val featureInput = FeaturePoint.convertToFeatureRDD(retaggedInput)
+    * 
+    */
 
     retaggedInput.unpersist()
     featureInput.persist()
