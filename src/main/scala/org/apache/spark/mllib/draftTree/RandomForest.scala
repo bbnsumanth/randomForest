@@ -31,6 +31,7 @@ import org.apache.spark.Accumulable
 import org.apache.spark.AccumulableParam
 import org.apache.spark.SparkContext._
 import util.Random._
+import scala.math._
 
 /**
  * :: Experimental ::
@@ -81,17 +82,56 @@ private class RandomForest(
     timer.start("init")
 
     val retaggedInput = input.retag(classOf[LabeledPoint]).persist
-    
+
     val label = retaggedInput.map(x => x.label).collect
     val featureInput = FeaturePoint.convertToFeatureRDD(retaggedInput)
+
+    //###########################################################################################################################
+
+    /**
+     * feature arity is calculated before creating metadata
+     * if categoricalFeaturesInfo is given in strategy it will use it
+     * if none is given as ategoricalFeaturesInfo in strategy,the below code will calculate the featureArity from featureInput.
+     *
+     */
+    val featureArity = strategy.categoricalFeaturesInfo match {
+      case Some(categoricalFeaturesInfo) => {
+        categoricalFeaturesInfo
+      }
+      case None => {
+        // used when partition by features is used
+        featureInput.map { fp =>
+          val numDistinctValues = fp.featureValues.distinct.length
+          val fractionOfDistinctValues = (numDistinctValues.toDouble / fp.featureValues.length.toDouble)
+          if(fp.featureValues.forall(x=>x==ceil(x))){
+            if (fractionOfDistinctValues > .5) {
+              //value are whole numbers but huge arity..so consider them as continuous
+            (fp.featureIndex, 0) //continuous feature
+            }else{
+              (fp.featureIndex, fp.featureValues.distinct.length) //categorical feature
+            }
+            
+          }else {
+            (fp.featureIndex, 0) //continuous feature
+          }
+
+        }.collect.toMap.filter(_._2 != 0)
+      }
+    }
     
-    //from the featureInput we can derive the featureArity map,but we need what features are continous 
-    //in the strategy instead of categoricalFeatureInfo..now the user instead of giving categoricalFeatureInfo should give now what are continous features
-    // then we can go through the featureInput to find the map[featureIndex -> no.of categories]
-    
+    println("################# featurearity: " + featureArity )
+
+    featureArity.foreach {
+      case (feature, arity) =>
+        require(arity >= 2,
+          s"DecisionTree Strategy given invalid categoricalFeaturesInfo setting:" +
+            s" feature $feature has $arity categories.  The number of categories should be >= 2.")
+    }
+
+    //########################################################################################################################### 
 
     val metadata =
-      DecisionTreeMetadata.buildMetadata(retaggedInput, strategy)
+      DecisionTreeMetadata.buildMetadata(retaggedInput, strategy, featureArity)
 
     logDebug("algo = " + strategy.algo)
     logDebug("numTrees = " + strategy.numTrees)
@@ -140,8 +180,6 @@ private class RandomForest(
     }
 
     println("@@@@@@@@@@@@@@@@@@@@@@@@@@ weightMatrix for tree 1: " + weightMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@")
-    
-   
 
     //NodeInstanceMAtrix,,,initialize all values to 1 for initial root node calculation 
     var nodeInstanceMatrix = Array.fill[Array[Int]](metadata.numTrees)(Array.fill[Int](metadata.numExamples.toInt)(1))
@@ -204,7 +242,7 @@ private class RandomForest(
 
       //******************** Choose splits for nodes in group, and enqueue new nodes as needed.**************************
       val NodesToTrain = nodesForGroup.values.map(_.size).sum
-      println("number of nodes to train in this level of trainig is : " +NodesToTrain+" %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%" )
+      println("number of nodes to train in this level of trainig is : " + NodesToTrain + " %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
       timer.start("findBestSplits")
 
       val treeToGlobalIndexToSplit = DecisionTree.findBestSplits(featureInput, metadata, topNodes, nodesForGroup,
@@ -227,8 +265,7 @@ private class RandomForest(
 
       nodeInstanceMatrix = tempMatrix.clone
 
-     // println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 0: " + nodeInstanceMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@@")
-      
+      // println("@@@@@@@@@@@@@@@@@@@@ updated nodeInstanceMatrix for tree 0: " + nodeInstanceMatrix(0).mkString(",") + "@@@@@@@@@@@@@@@@@")
 
       timer.stop("updateNodeInstanceMatrix")
     }
@@ -302,7 +339,7 @@ object RandomForest extends Serializable with Logging {
   def trainClassifier(
     input: RDD[LabeledPoint],
     numClassesForClassification: Int,
-    categoricalFeaturesInfo: Map[Int, Int],
+    categoricalFeaturesInfo: Map[Int, Int] = Map[Int, Int](),
     numTrees: Int,
     featureSubsetStrategy: String,
     impurity: String,
@@ -311,8 +348,13 @@ object RandomForest extends Serializable with Logging {
     seed: Int = Utils.random.nextInt()): RandomForestModel = {
 
     val impurityType = Impurities.fromString(impurity)
-    val strategy = new Strategy(Classification, impurityType, maxDepth,
-      numClassesForClassification, maxBins, Sort, categoricalFeaturesInfo, numTrees, featureSubsetStrategy)
+    val strategy = if (categoricalFeaturesInfo == Map[Int, Int]()) {
+      new Strategy(Classification, impurityType, maxDepth,
+        numClassesForClassification, maxBins, quantileCalculationStrategy = Sort, numTrees = numTrees, featureSubsetStrategy = featureSubsetStrategy)
+    } else {
+      new Strategy(Classification, impurityType, maxDepth,
+        numClassesForClassification, maxBins, Sort, Some(categoricalFeaturesInfo), numTrees, featureSubsetStrategy)
+    }
 
     trainClassifier(input, strategy, seed)
   }
@@ -388,7 +430,7 @@ object RandomForest extends Serializable with Logging {
    */
   def trainRegressor(
     input: RDD[LabeledPoint],
-    categoricalFeaturesInfo: Map[Int, Int],
+    categoricalFeaturesInfo: Map[Int, Int] = Map[Int, Int](),
     numTrees: Int,
     featureSubsetStrategy: String,
     impurity: String,
@@ -396,8 +438,14 @@ object RandomForest extends Serializable with Logging {
     maxBins: Int,
     seed: Int = Utils.random.nextInt()): RandomForestModel = {
     val impurityType = Impurities.fromString(impurity)
-    val strategy = new Strategy(Regression, impurityType, maxDepth,
-      0, maxBins, Sort, categoricalFeaturesInfo)
+    val strategy = if (categoricalFeaturesInfo == Map[Int, Int]()) {
+      new Strategy(Regression, impurityType, maxDepth,
+        0, maxBins, Sort, numTrees = numTrees, featureSubsetStrategy = featureSubsetStrategy)
+    } else {
+      new Strategy(Regression, impurityType, maxDepth,
+        0, maxBins, Sort, Some(categoricalFeaturesInfo), numTrees, featureSubsetStrategy)
+    }
+
     trainRegressor(input, strategy, seed)
   }
 
@@ -514,7 +562,6 @@ object MatrixAccumulatorParam extends AccumulableParam[Array[Array[Int]], (Int, 
     val rowLength: Int = m1(0).length
     var updatedMatrix = Array.ofDim[Int](columnLength, rowLength)
 
-    
     var j: Int = 0
     while (j < columnLength) {
       var i: Int = 0

@@ -73,7 +73,8 @@ class Strategy (
     val numClassesForClassification: Int = 2,
     val maxBins: Int = 32,
     val quantileCalculationStrategy: QuantileStrategy = Sort,
-    val categoricalFeaturesInfo: Map[Int, Int] = Map[Int, Int](),
+    //val categoricalFeaturesInfo: Map[Int, Int] = Map[Int, Int](),
+    val categoricalFeaturesInfo: Option[Map[Int, Int]] = None,
     val numTrees : Int = 1,
     val featureSubsetStrategy:String = "auto",
     val minInstancesPerNode: Int = 1,
@@ -96,8 +97,6 @@ class Strategy (
 
   val isMulticlassClassification =
     algo == Classification && numClassesForClassification > 2
-  val isMulticlassWithCategoricalFeatures
-    = isMulticlassClassification && (categoricalFeaturesInfo.size > 0)
 
   /**
    * Java-friendly constructor for [[org.apache.spark.mllib.tree.configuration.Strategy]]
@@ -111,9 +110,9 @@ class Strategy (
       categoricalFeaturesInfo: java.util.Map[java.lang.Integer, java.lang.Integer],
       numTrees:Int,
       featureSubsetStrategy:String) {
-    
+      //should change the map to option(Map)
       this(algo, impurity, maxDepth, numClassesForClassification, maxBins, Sort,
-      categoricalFeaturesInfo.asInstanceOf[java.util.Map[Int, Int]].asScala.toMap,numTrees,featureSubsetStrategy)
+      Some(categoricalFeaturesInfo.asInstanceOf[java.util.Map[Int, Int]].asScala.toMap),numTrees,featureSubsetStrategy)
   }
     
   /**
@@ -152,12 +151,16 @@ class Strategy (
     
     require(maxBins >= 2, s"DecisionTree Strategy given invalid maxBins parameter: $maxBins." +
       s"  Valid values are integers >= 2.")
-    
+   // should move it from here
+      /*
     categoricalFeaturesInfo.foreach { case (feature, arity) =>
       require(arity >= 2,
         s"DecisionTree Strategy given invalid categoricalFeaturesInfo setting:" +
         s" feature $feature has $arity categories.  The number of categories should be >= 2.")
-    }
+        }
+        * 
+        */
+    
   }
 
   

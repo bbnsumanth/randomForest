@@ -288,7 +288,8 @@ private[draftTree] object DecisionTreeMetadata {
    */
   def buildMetadata(
       input: RDD[LabeledPoint],
-      strategy: Strategy
+      strategy: Strategy,
+      featureArity:Map[Int,Int]
       ): DecisionTreeMetadata = {
     
     val numFeatures = input.take(1)(0).features.size
@@ -313,8 +314,9 @@ private[draftTree] object DecisionTreeMetadata {
  * This needs to be checked here instead of in Strategy since maxPossibleBins can be modified
  * based on the number of training examples.
  */
-    if (strategy.categoricalFeaturesInfo.nonEmpty) {
-      val maxCategoriesPerFeature = strategy.categoricalFeaturesInfo.values.max
+    if (featureArity.nonEmpty) {
+      val maxCategoriesPerFeature = featureArity.values.max
+      println("###################### maxCategoriesPerFeature :"+ maxCategoriesPerFeature)
       require(maxCategoriesPerFeature <= maxPossibleBins,
         s"DecisionTree requires maxBins (= $maxPossibleBins) >= max categories " +
           s"in categorical features (= $maxCategoriesPerFeature)")
@@ -336,7 +338,7 @@ private[draftTree] object DecisionTreeMetadata {
         ((math.log(maxPossibleBins / 2 + 1) / math.log(2.0)) + 1).floor.toInt
         
         
-      strategy.categoricalFeaturesInfo.foreach { case (featureIndex, numCategories) =>
+      featureArity.foreach { case (featureIndex, numCategories) =>
         // Decide if some categorical features should be treated as unordered features,
         //  which require 2 * ((1 << numCategories - 1) - 1) bins.
         // We do this check with log values to prevent overflows in case numCategories is large.
@@ -354,7 +356,7 @@ private[draftTree] object DecisionTreeMetadata {
     //NOTE: for binary classification or regression,unorderedFeatures set is empty,because all CATEGORICAL FEATURES ARE CONSIDERED AS ORDERED
     
     else {
-      strategy.categoricalFeaturesInfo.foreach { case (featureIndex, numCategories) =>
+      featureArity.foreach { case (featureIndex, numCategories) =>
         numBins(featureIndex) = numCategories
       }
     }
@@ -380,7 +382,7 @@ private[draftTree] object DecisionTreeMetadata {
     }
 
     new DecisionTreeMetadata(numFeatures, numExamples, numClasses, numBins.max,
-      strategy.categoricalFeaturesInfo, unorderedFeatures.toSet, numBins,
+      featureArity, unorderedFeatures.toSet, numBins,
       strategy.impurity, strategy.quantileCalculationStrategy, strategy.maxDepth,
       strategy.minInstancesPerNode, strategy.minInfoGain, strategy.numTrees, numFeaturesPerNode)
     

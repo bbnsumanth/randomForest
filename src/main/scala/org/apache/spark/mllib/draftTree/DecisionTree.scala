@@ -159,7 +159,26 @@ object DecisionTree extends Serializable with Logging {
     quantileCalculationStrategy: QuantileStrategy,
     categoricalFeaturesInfo: Map[Int, Int]): DecisionTreeModel = {
     val strategy = new Strategy(algo, impurity, maxDepth, numClassesForClassification, maxBins,
-      quantileCalculationStrategy, categoricalFeaturesInfo)
+      quantileCalculationStrategy, Some(categoricalFeaturesInfo))
+    new DecisionTree(strategy).train(input)
+  }
+  
+    /**
+   * constructor for categoricalFeaturesInfo = None
+   * 
+   */
+  
+    def train(
+    input: RDD[LabeledPoint],
+    algo: Algo,
+    impurity: Impurity,
+    maxDepth: Int,
+    numClassesForClassification: Int,
+    maxBins: Int,
+    quantileCalculationStrategy: QuantileStrategy
+    ): DecisionTreeModel = {
+    val strategy = new Strategy(algo, impurity, maxDepth, numClassesForClassification, maxBins,
+      quantileCalculationStrategy, None)
     new DecisionTree(strategy).train(input)
   }
 
@@ -193,6 +212,22 @@ object DecisionTree extends Serializable with Logging {
     train(input, Classification, impurityType, maxDepth, numClassesForClassification, maxBins, Sort,
       categoricalFeaturesInfo)
   }
+  
+  /**
+   * constructor for categoricalFeaturesInfo = None
+   * 
+   */
+    def trainClassifier(
+    input: RDD[LabeledPoint],
+    numClassesForClassification: Int,
+    impurity: String,
+    maxDepth: Int,
+    maxBins: Int): DecisionTreeModel = {
+    val impurityType = Impurities.fromString(impurity)
+    train(input, Classification, impurityType, maxDepth, numClassesForClassification, maxBins, Sort)
+  }
+  
+  
 
   /**
    * Java-friendly API for [[org.apache.spark.mllib.tree.DecisionTree$#trainClassifier]]
@@ -235,6 +270,23 @@ object DecisionTree extends Serializable with Logging {
     val impurityType = Impurities.fromString(impurity)
     train(input, Regression, impurityType, maxDepth, 0, maxBins, Sort, categoricalFeaturesInfo)
   }
+  
+  /**
+   * constructor for categoricalFeaturesInfo = None
+   * 
+   */
+   def trainRegressor(
+    input: RDD[LabeledPoint],
+    impurity: String,
+    maxDepth: Int,
+    maxBins: Int): DecisionTreeModel = {
+    val impurityType = Impurities.fromString(impurity)
+    train(input, Regression, impurityType, maxDepth, 0, maxBins, Sort)
+  }
+  
+  
+  
+  
 
   /**
    * Java-friendly API for [[org.apache.spark.mllib.tree.DecisionTree$#trainRegressor]]

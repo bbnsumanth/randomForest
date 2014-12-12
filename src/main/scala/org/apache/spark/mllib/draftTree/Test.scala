@@ -54,6 +54,7 @@ object Test {
     println("Training Error = " + trainErr)
     println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")  
     println("Testing Error = " + testingErr)
+    println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     
     
     } else {
@@ -84,6 +85,7 @@ object Test {
     println("Training Error = " + trainErr)
     println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     println("Testing Error = " + testingErr)
+    println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     }
     
 
@@ -104,7 +106,7 @@ import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.util.Utils
 import org.apache.spark.util._
 
-    val initialData = MLUtils.loadLibSVMFile(sc, "/home/bharath/iris.txt").cache()
+    val initialData = MLUtils.loadLibSVMFile(sc, "/home/bharath/data/iris.txt").cache()
     val classCounts = initialData.map(_.label).countByValue()
     val sortedClasses = classCounts.keys.toList.sorted
     val numClasses = classCounts.size
@@ -118,7 +120,7 @@ import org.apache.spark.util._
     val maxDepth = 10
     val maxBins = 100
     val seed = 3
-    val testingData = MLUtils.loadLibSVMFile(sc, "/home/bharath/iris.txt").cache()
+    val testingData = MLUtils.loadLibSVMFile(sc, "/home/bharath/data/iris.txt").cache()
     
     if (numTrees == 1) {
       val model = DecisionTree.trainClassifier(data, numClasses, categoricalFeaturesInfo, impurity, maxDepth, maxBins)
@@ -145,7 +147,7 @@ import org.apache.spark.util._
     println("Training Error = " + trainErr)
     println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")  
     println("Testing Error = " + testingErr)
-    
+    println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     
     } else {
       
@@ -175,6 +177,7 @@ import org.apache.spark.util._
     println("Training Error = " + trainErr)
     println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     println("Testing Error = " + testingErr)
+    println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
     }
     
 
